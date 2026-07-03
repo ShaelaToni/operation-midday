@@ -1,3 +1,6 @@
+# Supported Python: 3.11 - 3.13 (built and tested on 3.12). Not 3.14 yet - psycopg[binary] 3.2.1 has no 3.14 wheel.
+# Local default is pinned in .python-version (3.12). Production pins python:3.12-slim in the Dockerfile.
+#
 Django==5.0.6
 psycopg[binary]==3.2.1
 python-dotenv==1.0.1
