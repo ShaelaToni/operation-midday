@@ -8,3 +8,4 @@ Importing this package registers every adapter (side-effecting register() at mod
 Callers do `import noon.adapters` then get_adapter(source).
 """
 from noon.adapters import google  # noqa: F401  (registers GoogleAdapter)
+from noon.adapters import meta  # noqa: F401  (registers MetaAdapter)
