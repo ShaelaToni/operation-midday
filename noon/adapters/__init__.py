@@ -10,3 +10,4 @@ Callers do `import noon.adapters` then get_adapter(source).
 from noon.adapters import google  # noqa: F401  (registers GoogleAdapter)
 from noon.adapters import meta  # noqa: F401  (registers MetaAdapter)
 from noon.adapters import taboola  # noqa: F401  (registers TaboolaAdapter)
+from noon.adapters import tiktok  # noqa: F401  (registers TikTokAdapter)
