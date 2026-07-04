@@ -1,31 +1,35 @@
-"""Google Ads fixture generator - emits raw GAQL response shape (cost_micros un-divided)."""
+"""Google Ads fixture generator - emits raw GAQL response shape (cost_micros un-divided).
+Filler economics come from noon.fixtures.economics (coherent claim = payout x over_claim, shared token)."""
 from __future__ import annotations
+
+from decimal import Decimal
 
 from faker import Faker
 
-_GEOS = ("US", "CA", "GB", "AU")
+from noon.fixtures.economics import offer_economics
 
 
 def generate_google_rows(n: int = 100, seed: int = 0) -> list[dict]:
     """Generate n raw Google Ads rows in real GAQL shape. Deterministic for a given seed.
-    cost_micros is in MILLIONTHS (un-divided) - the adapter does the division.
-    Uses an ISOLATED per-instance RNG (seed_instance), so generators never share global
-    Faker state - each is reproducible independent of call order or other generators.
-    """
+    cost_micros is in MILLIONTHS (un-divided). Claim (conversions_value) is a realistic over-claim
+    of the offer's real payout (from economics), sharing the per-(offer,platform) token so revenue
+    joins. Sparse offers emit zero claim value."""
     fake = Faker()
-    fake.seed_instance(seed)  # instance-level RNG, NOT the class-level Faker.seed()
+    fake.seed_instance(seed)
     rows = []
     for _ in range(n):
+        offer_id = f"OFFER{fake.random_int(min=1, max=20)}"
+        econ = offer_economics(offer_id, seed)
+        pl = econ.placements["google"]
         campaign_id = f"C{fake.random_int(min=1000, max=9999)}"
         ad_id = f"A{fake.random_int(min=100, max=999)}"
-        geo = _GEOS[fake.random_int(min=0, max=len(_GEOS) - 1)]
-        offer_id = f"OFFER{fake.random_int(min=1, max=20)}"
-        dollars = fake.random_int(min=100, max=50000) / 100.0  # $1.00 - $500.00
-        cost_micros = int(round(dollars * 1_000_000))          # back to micros (raw shape)
+        dollars = fake.random_int(min=100, max=50000) / 100.0
+        cost_micros = int(round(dollars * 1_000_000))
         clicks = fake.random_int(min=0, max=500)
         impressions = clicks * fake.random_int(min=10, max=100)
-        conversions = round(clicks * (fake.random_int(min=0, max=15) / 100.0), 2)
-        conv_value = round(conversions * fake.random_int(min=10, max=200), 2)
+        conversions = econ.conversions_weight
+        mid = (pl.payout_low + pl.payout_high) / 2
+        claim = Decimal("0") if econ.is_sparse else (Decimal(conversions) * mid * econ.over_claim_factor)
         rows.append({
             "campaign.id": campaign_id,
             "campaign.name": f"{fake.word().capitalize()} Campaign",
@@ -34,11 +38,11 @@ def generate_google_rows(n: int = 100, seed: int = 0) -> list[dict]:
             "metrics.impressions": impressions,
             "metrics.clicks": clicks,
             "metrics.conversions": conversions,
-            "metrics.conversions_value": conv_value,
-            "geographic_view.country": geo,
+            "metrics.conversions_value": f"{claim:.2f}",
+            "geographic_view.country": econ.geo,
             "ad_group_ad.ad.id": ad_id,
             "ad_group_ad.ad.name": f"Ad {ad_id}",
-            "tracking_token": f"tok_{campaign_id}_{ad_id}",
+            "tracking_token": pl.token,
             "offer_id": offer_id,
         })
     return rows

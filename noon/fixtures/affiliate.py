@@ -1,10 +1,12 @@
-"""Affiliate/postback fixture generator - emits raw server-to-server postback shape (REVENUE side)."""
+"""Affiliate/postback fixture generator - raw server-to-server postback shape (REVENUE side).
+Filler payout/token come from noon.fixtures.economics so revenue JOINS the spend side."""
 from __future__ import annotations
 
 from faker import Faker
 
-_GEOS = ("US", "CA", "GB", "AU")
-# Realistic status mix: mostly approved/pending, some rejected/reversed (the reversal reality).
+from noon.fixtures.economics import offer_economics, placement_for
+
+_SPEND_PLATFORMS = ("google", "meta", "taboola", "tiktok")
 _STATUS_WEIGHTS = (
     ("approved", 55),
     ("pending", 25),
@@ -24,26 +26,33 @@ def _weighted_status(fake: Faker) -> str:
 
 
 def generate_affiliate_rows(n: int = 100, seed: int = 0) -> list[dict]:
-    """Generate n raw affiliate postback rows (REVENUE side). Deterministic per seed.
-    transaction_id = unique conversion id. sub_id = the tracking token (join key). payout = real
-    money (always present). status = provisional state (reversal mechanism). geo stays 2-char."""
+    """Generate n raw affiliate postback rows (REVENUE side). Deterministic per seed. payout is the
+    REAL money, drawn from the offer+platform placement band; sub_id is that placement's token so
+    revenue joins the spend row. geo comes from the offer's economics."""
     fake = Faker()
     fake.seed_instance(seed)
     rows = []
     for i in range(n):
         offer_id = f"OFFER{fake.random_int(min=1, max=20)}"
-        geo = _GEOS[fake.random_int(min=0, max=len(_GEOS) - 1)]
-        payout = round(fake.random_int(min=500, max=15000) / 100.0, 2)  # $5.00 - $150.00
-        d = fake.date_between(start_date="-365d", end_date="today")
-        hour = fake.random_int(min=0, max=23)
-        minute = fake.random_int(min=0, max=59)
-        rows.append({
-            "transaction_id": f"TXN{seed}_{i}_{fake.random_int(min=10000, max=99999)}",
-            "sub_id": f"tok_C{fake.random_int(min=1000, max=9999)}_A{fake.random_int(min=100, max=999)}",
-            "offer_id": offer_id,
-            "payout": f"{payout:.2f}",
-            "status": _weighted_status(fake),
-            "timestamp": f"{d.isoformat()}T{hour:02d}:{minute:02d}:00Z",
-            "geo": geo,
-        })
+        econ = offer_economics(offer_id, seed)
+        for platform in _SPEND_PLATFORMS:
+            pl = placement_for(offer_id, platform, seed)
+            low = float(pl.payout_low)
+            high = float(pl.payout_high)
+            # One postback per conversion (conversions_weight), per platform - matches each
+            # platform's claimed conversions with that platform's real payouts.
+            for c in range(econ.conversions_weight):
+                payout = round(fake.random_int(min=int(low * 100), max=int(high * 100)) / 100.0, 2)
+                d = fake.date_between(start_date="-365d", end_date="today")
+                hour = fake.random_int(min=0, max=23)
+                minute = fake.random_int(min=0, max=59)
+                rows.append({
+                    "transaction_id": f"TXN{seed}_{i}_{platform}_{c}_{fake.random_int(min=10000, max=99999)}",
+                    "sub_id": pl.token,
+                    "offer_id": offer_id,
+                    "payout": f"{payout:.2f}",
+                    "status": _weighted_status(fake),
+                    "timestamp": f"{d.isoformat()}T{hour:02d}:{minute:02d}:00Z",
+                    "geo": econ.geo,
+                })
     return rows

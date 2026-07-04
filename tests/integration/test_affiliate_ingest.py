@@ -13,7 +13,9 @@ def test_generator_emits_real_postback_shape():
     from noon.fixtures.affiliate import generate_affiliate_rows
 
     rows = generate_affiliate_rows(n=10, seed=42)
-    assert len(rows) == 10
+    # n is offer-iterations; each emits (4 platforms x that offer's conversions_weight >= 1)
+    # postbacks, so the count is at least 4*n. This also validates the per-platform emission.
+    assert len(rows) >= 4 * 10, f"expected >= 4*n postbacks (4 platforms x weight), got {len(rows)}"
     r = rows[0]
     for key in ("transaction_id", "sub_id", "offer_id", "payout",
                 "status", "timestamp", "geo"):
