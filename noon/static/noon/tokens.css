@@ -1,0 +1,51 @@
+/* Noon design tokens. Palette is the authoritative set from NOON_NAMING.md (do not alter).
+   Fonts self-hosted (Fraunces display, IBM Plex Sans body - both SIL OFL, notices in fonts/). */
+@font-face { font-family:"Fraunces"; font-style:normal; font-weight:600; font-display:swap; src:url("fonts/fraunces-600.woff2") format("woff2"); }
+@font-face { font-family:"Fraunces"; font-style:normal; font-weight:700; font-display:swap; src:url("fonts/fraunces-700.woff2") format("woff2"); }
+@font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:400; font-display:swap; src:url("fonts/plex-400.woff2") format("woff2"); }
+@font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:500; font-display:swap; src:url("fonts/plex-500.woff2") format("woff2"); }
+@font-face { font-family:"IBM Plex Sans"; font-style:normal; font-weight:600; font-display:swap; src:url("fonts/plex-600.woff2") format("woff2"); }
+:root {
+  --ink:#14181F; --ink-soft:#5B6472;
+  --paper:#FAF9F6; --surface:#FFFFFF; --line:#E8E6E1;
+  --accent:#0E6E7E; --accent-ink:#0A5561;
+  --winning:#1E7A4D; --watch:#A6802E; --action:#A83A3A; --claimed:#9AA1AC;
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --step--1:.82rem; --step-0:1rem; --step-1:1.3rem; --step-2:1.85rem; --step-3:2.8rem;
+  --step-hero:clamp(3.2rem,8vw,5.6rem);
+  --sp-1:.4rem; --sp-2:.8rem; --sp-3:1.2rem; --sp-4:2rem; --sp-5:3.2rem; --sp-6:5rem; --wrap:60rem;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--paper);color:var(--ink);font:400 var(--step-0)/1.55 var(--body);-webkit-font-smoothing:antialiased;}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:var(--sp-6) var(--sp-4);}
+.masthead{display:flex;align-items:baseline;gap:var(--sp-2);margin-bottom:var(--sp-6);}
+.masthead__mark{font-family:var(--display);font-weight:700;font-size:var(--step-1);letter-spacing:-.01em;}
+.masthead__sub{font-size:var(--step--1);color:var(--ink-soft);letter-spacing:.08em;text-transform:uppercase;}
+.gap{margin-bottom:var(--sp-6);}
+.gap__row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--sp-3) var(--sp-6);}
+.gap__side{display:flex;flex-direction:column;gap:var(--sp-1);}
+.gap__label{font-size:var(--step--1);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);}
+.gap__claim{font-family:var(--display);font-size:var(--step-3);font-weight:600;line-height:1;color:var(--claimed);letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:rgba(154,161,172,.55);}
+.gap__real{font-family:var(--display);font-size:var(--step-hero);font-weight:700;line-height:.92;color:var(--accent);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.gap__line{font-size:var(--step-1);color:var(--ink);margin-top:var(--sp-4);max-width:34rem;line-height:1.4;}
+.gap__line b{color:var(--accent);font-weight:600;}
+.reclaim{display:flex;align-items:baseline;gap:var(--sp-2) var(--sp-3);flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--watch);border-radius:12px;padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-6);}
+.reclaim__label{font-size:var(--step-0);color:var(--ink-soft);}
+.reclaim__amount{font-family:var(--display);font-size:var(--step-2);font-weight:700;color:var(--watch);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+.moves{display:grid;gap:var(--sp-5);}
+.moves__head{display:flex;align-items:baseline;gap:var(--sp-2);margin-bottom:var(--sp-3);}
+.moves__title{font-family:var(--display);font-size:var(--step-1);font-weight:700;letter-spacing:-.01em;}
+.moves__hint{font-size:var(--step--1);color:var(--ink-soft);}
+.card{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-3);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);}
+.card--fuel{border-left:3px solid var(--winning);}
+.card--free{border-left:3px solid var(--watch);}
+.card__offer{font-weight:600;}
+.card__reason{font-size:var(--step--1);color:var(--ink-soft);margin-top:2px;}
+.card__amount{font-family:var(--display);font-size:var(--step-1);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;}
+.card--fuel .card__amount{color:var(--winning);}
+.card--free .card__amount{color:var(--watch);}
+.empty{color:var(--ink-soft);padding:var(--sp-4);text-align:center;border:1px dashed var(--line);border-radius:12px;}
+@media (max-width:34rem){.wrap{padding:var(--sp-5) var(--sp-3);}.card{flex-direction:column;align-items:flex-start;gap:var(--sp-1);}}
+@media (prefers-reduced-motion:no-preference){.gap__real{animation:rise .6s cubic-bezier(.2,.7,.2,1) both;}@keyframes rise{from{opacity:0;transform:translateY(.25em);}to{opacity:1;transform:none;}}}

@@ -1,25 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>The Noon Report</title>
-</head>
-<body>
-  <h1>The Noon Report</h1>
-  <section>
-    <p>Platforms claim ${{ report.total_claim }}, you made ${{ report.total_real }}.</p>
-    <p>Gap: {{ report.gap_multiple }}x</p>
-    <p>Worth acting on: ${{ report.worth_acting_on }}</p>
+{% extends "noon/base.html" %}
+{% load noon_format %}
+{% block content %}
+  <header class="masthead">
+    <span class="masthead__mark">Noon</span>
+    <span class="masthead__sub">The Noon Report</span>
+  </header>
+  <section class="gap">
+    <div class="gap__row">
+      <div class="gap__side">
+        <span class="gap__label">Your platforms claim</span>
+        <span class="gap__claim">{{ report.total_claim|money }}</span>
+      </div>
+      <div class="gap__side">
+        <span class="gap__label">You actually made</span>
+        <span class="gap__real">{{ report.total_real|money }}</span>
+      </div>
+    </div>
+    <p class="gap__line">The platforms take credit for <b>{{ report.gap_multiple|gap }}x</b> what actually reached your account. Here is where to move the money.</p>
   </section>
-  <section>
-    <h2>Today's money moves</h2>
-    <ul>
-      {% for move in report.moves %}
-        <li>{{ move.action }}: {{ move.offer_id }} (${{ move.amount }}) - {{ move.reason }}</li>
-      {% empty %}
-        <li>No moves yet - seed and reconcile to see your numbers.</li>
-      {% endfor %}
-    </ul>
+  <section class="reclaim">
+    <span class="reclaim__label">Still yours to reclaim this week</span>
+    <span class="reclaim__amount">{{ report.worth_acting_on|money }}</span>
   </section>
-</body>
-</html>
+  <div class="moves">
+    <section>
+      <div class="moves__head"><h2 class="moves__title">Fuel these</h2><span class="moves__hint">your money works here</span></div>
+      {% for move in top_fuel %}
+        <div class="card card--fuel">
+          <div><div class="card__offer">{{ move.offer_id }}</div><div class="card__reason">Earning real profit - feed it to grow.</div></div>
+          <div class="card__amount">+{{ move.amount|money }}</div>
+        </div>
+      {% empty %}<div class="empty">No winners yet. Seed and reconcile to see your numbers.</div>{% endfor %}
+    </section>
+    <section>
+      <div class="moves__head"><h2 class="moves__title">Free up</h2><span class="moves__hint">reclaim and feed your winners</span></div>
+      {% for move in top_free_up %}
+        <div class="card card--free">
+          <div><div class="card__offer">{{ move.offer_id }}</div><div class="card__reason">{{ move.reason }}</div></div>
+          <div class="card__amount">{{ move.amount|money }}</div>
+        </div>
+      {% empty %}<div class="empty">Nothing draining right now.</div>{% endfor %}
+    </section>
+  </div>
+{% endblock %}
