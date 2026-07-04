@@ -14,7 +14,6 @@ subsequent steps that EXTEND this skeleton (they do not replace it).
 """
 from __future__ import annotations
 
-from collections import defaultdict
 from decimal import Decimal
 
 from domain.records import SpendRecord, ConversionRecord, ProfitResult
@@ -51,23 +50,67 @@ def _aggregate_spend(spend_records: list[SpendRecord]) -> dict[tuple, dict]:
     return grains
 
 
-def _index_conversions_by_token(conversions: list[ConversionRecord]) -> dict[str, list[ConversionRecord]]:
-    """Index conversions by their tracking token for the primary join."""
-    by_token: dict[str, list[ConversionRecord]] = defaultdict(list)
+def _dedup_conversions(conversions: list[ConversionRecord]) -> list[ConversionRecord]:
+    """De-dup by conversion_id, keeping the LAST occurrence (arrival order = latest status).
+    A re-sent conversion_id is a status update, not a second event. ConversionRecord has no
+    timestamp, so list order is the only 'latest' signal available (V2: real timestamp ordering)."""
+    latest: dict[str, ConversionRecord] = {}
     for c in conversions:
-        if c.tracking_token:
-            by_token[c.tracking_token].append(c)
-    return by_token
+        latest[c.conversion_id] = c  # later occurrence overwrites earlier
+    return list(latest.values())
+
+
+def _assign_conversions_to_grains(
+    grains: dict[tuple, dict], conversions: list[ConversionRecord]
+) -> dict[tuple, list[ConversionRecord]]:
+    """Attribute each conversion to exactly ONE grain: the first grain (in sorted grain-key
+    order) whose token set contains the conversion's token. Counted once total - a conversion
+    whose token is shared by multiple grains does not double-count.
+    V1 LIMIT: the non-winning sharing grain shows spend with zero revenue for this conversion
+    (a documented false-zombie risk); safe here because seeded story data is single-platform per
+    offer. V2: proportional / multi-touch split."""
+    matched: dict[tuple, list[ConversionRecord]] = {key: [] for key in grains}
+    sorted_keys = sorted(grains.keys())
+    for c in conversions:
+        if not c.tracking_token:
+            continue  # unjoinable by token; fallback join handled later (3c)
+        for key in sorted_keys:
+            if c.tracking_token in grains[key]["tokens"]:
+                matched[key].append(c)
+                break  # first matching grain wins - counted once
+    return matched
 
 
 def _build_result(grain: dict, matched: list[ConversionRecord]) -> ProfitResult:
-    """Aggregate matched conversions at the grain and build the ProfitResult.
-    reconciled_revenue = summed affiliate payout; reconciled_conversions = count; lineage recorded."""
+    """Aggregate matched conversions at the grain under the status contract.
+    reconciled_revenue = SUM(approved) - SUM(reversed) (may be negative - honest clawback signal).
+    reconciled_conversions = max(0, #approved - #reversed) (floored; a count can't be negative).
+    rejected + pending contribute nothing. revenue_status: reversed > provisional(pending) > confirmed."""
     s = grain["sample"]
-    reconciled_revenue = sum((c.revenue for c in matched), Decimal("0"))
-    reconciled_conversions = Decimal(len(matched))
-    source_keys = [c.conversion_id for c in matched]
-    revenue_status = "confirmed" if matched else "provisional"
+    approved = [c for c in matched if c.status == "approved"]
+    reversed_ = [c for c in matched if c.status == "reversed"]
+    has_pending = any(c.status == "pending" for c in matched)
+
+    approved_rev = sum((c.revenue for c in approved), Decimal("0"))
+    reversed_rev = sum((c.revenue for c in reversed_), Decimal("0"))
+    reconciled_revenue = approved_rev - reversed_rev  # may be negative
+
+    net_count = len(approved) - len(reversed_)
+    reconciled_conversions = Decimal(max(0, net_count))  # floored at zero
+
+    if reversed_:
+        revenue_status = "reversed"
+    elif has_pending:
+        revenue_status = "provisional"
+    else:
+        revenue_status = "confirmed"
+
+    # Lineage: approved + reversed ids (the rows that moved the number), deduped, order-stable.
+    source_keys: list[str] = []
+    for c in approved + reversed_:
+        if c.conversion_id not in source_keys:
+            source_keys.append(c.conversion_id)
+
     return ProfitResult(
         date=s.date,
         platform=s.platform,
@@ -86,16 +129,16 @@ def _build_result(grain: dict, matched: list[ConversionRecord]) -> ProfitResult:
 
 def reconcile(spend_records: list[SpendRecord],
               conversions: list[ConversionRecord]) -> list[ProfitResult]:
-    """Join spend to revenue on the tracking token, aggregate to the grain, and return one
-    ProfitResult per spend grain. reconciled_revenue is the real affiliate payout (the truth);
-    the platform claim is carried through for the downstream gap, never into the profit number."""
+    """Join spend to revenue on the tracking token, aggregate to the grain under the status
+    contract, and return one ProfitResult per spend grain. reconciled_revenue is the real
+    affiliate payout net of reversals (the truth); the platform claim is carried through for the
+    downstream gap, never into the profit number. Each conversion counts once (deduped by id,
+    attributed to one grain)."""
     grains = _aggregate_spend(spend_records)
-    convs_by_token = _index_conversions_by_token(conversions)
+    deduped = _dedup_conversions(conversions)
+    matched_by_grain = _assign_conversions_to_grains(grains, deduped)
 
     results: list[ProfitResult] = []
     for key, grain in grains.items():
-        matched: list[ConversionRecord] = []
-        for token in grain["tokens"]:
-            matched.extend(convs_by_token.get(token, []))
-        results.append(_build_result(grain, matched))
+        results.append(_build_result(grain, matched_by_grain[key]))
     return results

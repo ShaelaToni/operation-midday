@@ -75,3 +75,90 @@ def test_reconciled_revenue_is_decimal_not_float():
     results = reconcile([_spend()], [_conv(revenue="300.00")])
     assert isinstance(results[0].reconciled_revenue, Decimal)
     assert isinstance(results[0].spend, Decimal)
+
+
+def test_reversed_conversion_subtracts_revenue_and_count():
+    from domain.reconciliation import reconcile
+    # OVERNIGHT_REVERSAL shape: approved 1500 + reversed 1200 -> net revenue 300, net count 0.
+    spend = [_spend(spend="800.00")]
+    convs = [
+        _conv(revenue="1500.00", status="approved", conv_id="TXN_A"),
+        _conv(revenue="1200.00", status="reversed", conv_id="TXN_R"),
+    ]
+    r = reconcile(spend, convs)[0]
+    assert r.reconciled_revenue == Decimal("300.00")     # 1500 - 1200
+    assert r.reconciled_conversions == Decimal("0")      # 1 approved - 1 reversed
+    assert r.revenue_status == "reversed"                # reversed dominates the status
+    # lineage keeps BOTH contributing ids.
+    assert "TXN_A" in r.source_keys and "TXN_R" in r.source_keys
+
+
+def test_rejected_and_pending_excluded_from_number():
+    from domain.reconciliation import reconcile
+    spend = [_spend(spend="100.00")]
+    convs = [
+        _conv(revenue="200.00", status="approved", conv_id="TXN_OK"),
+        _conv(revenue="500.00", status="rejected", conv_id="TXN_REJ"),   # excluded
+        _conv(revenue="300.00", status="pending", conv_id="TXN_PEND"),   # excluded
+    ]
+    r = reconcile(spend, convs)[0]
+    assert r.reconciled_revenue == Decimal("200.00")     # only the approved
+    assert r.reconciled_conversions == Decimal("1")
+    # pending present (no reversed) -> status provisional.
+    assert r.revenue_status == "provisional"
+
+
+def test_confirmed_status_when_all_approved():
+    from domain.reconciliation import reconcile
+    r = reconcile([_spend()], [_conv(revenue="300.00", status="approved", conv_id="TXN1")])[0]
+    assert r.revenue_status == "confirmed"
+
+
+def test_duplicate_conversion_id_counted_once_latest_status_wins():
+    from domain.reconciliation import reconcile
+    # Same conversion_id appears twice: first approved, then reversed (a status UPDATE, not two events).
+    # Latest-wins -> the conversion is reversed; it must not be summed twice.
+    spend = [_spend(spend="100.00")]
+    convs = [
+        _conv(revenue="400.00", status="approved", conv_id="TXN_DUP"),
+        _conv(revenue="400.00", status="reversed", conv_id="TXN_DUP"),   # same id, updated status
+    ]
+    r = reconcile(spend, convs)[0]
+    # One conversion, now reversed -> approved sum 0, reversed sum 400 -> net -400.
+    assert r.reconciled_revenue == Decimal("-400.00")    # negative allowed (clawback signal)
+    assert r.reconciled_conversions == Decimal("0")      # floored at 0, not -1
+    assert r.revenue_status == "reversed"
+    # de-dup: the id appears once in lineage, not twice.
+    assert r.source_keys.count("TXN_DUP") == 1
+
+
+def test_cross_platform_dedup_same_conversion_counted_once():
+    from domain.reconciliation import reconcile
+    # Two spend rows (different platforms) share a token; ONE conversion on that token.
+    # The single conversion must attribute once, not once per platform.
+    spend = [
+        _spend(spend="100.00", platform="google", campaign="CG", ad="ADG", token="tok_shared"),
+        _spend(spend="80.00", platform="meta", campaign="CM", ad="ADM", token="tok_shared"),
+    ]
+    convs = [_conv(revenue="300.00", status="approved", conv_id="TXN_ONCE", token="tok_shared")]
+    results = reconcile(spend, convs)
+    # Total reconciled_revenue across grains must equal 300, not 600 (no double-count).
+    total_rev = sum((r.reconciled_revenue for r in results), Decimal("0"))
+    assert total_rev == Decimal("300.00")
+    total_conv = sum((r.reconciled_conversions for r in results), Decimal("0"))
+    assert total_conv == Decimal("1")
+
+
+def test_negative_net_revenue_allowed_count_floored():
+    from domain.reconciliation import reconcile
+    # Reversed exceeds approved: revenue goes negative (honest), count floors at zero.
+    spend = [_spend(spend="100.00")]
+    convs = [
+        _conv(revenue="1000.00", status="approved", conv_id="TXN_A"),
+        _conv(revenue="800.00", status="reversed", conv_id="TXN_R1"),
+        _conv(revenue="700.00", status="reversed", conv_id="TXN_R2"),
+    ]
+    r = reconcile(spend, convs)[0]
+    assert r.reconciled_revenue == Decimal("-500.00")    # 1000 - 800 - 700
+    assert r.reconciled_conversions == Decimal("0")      # max(0, 1 - 2)
+    assert r.revenue_status == "reversed"
