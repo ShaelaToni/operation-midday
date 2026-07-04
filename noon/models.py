@@ -121,6 +121,7 @@ class ProfitFact(models.Model):
     reconciled_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     platform_reported_revenue = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     revenue_status = models.CharField(max_length=16)  # provisional|confirmed|reversed
+    attribution = models.CharField(max_length=16, default="token")  # join quality: token|fallback|unattributed
     ruleset_version = models.CharField(max_length=32)
     source_keys = models.JSONField(default=list)  # lineage: contributing raw-row keys
     computed_at = models.DateTimeField(auto_now=True)
