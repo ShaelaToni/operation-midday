@@ -50,6 +50,7 @@ class ProfitResult:
     platform_reported_revenue: Decimal | None
     revenue_status: str
     source_keys: list[str] = field(default_factory=list)
+    attribution: str = "token"  # join quality: token | fallback | unattributed (distinct from revenue_status)
 
 
 @dataclass

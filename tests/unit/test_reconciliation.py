@@ -162,3 +162,90 @@ def test_negative_net_revenue_allowed_count_floored():
     assert r.reconciled_revenue == Decimal("-500.00")    # 1000 - 800 - 700
     assert r.reconciled_conversions == Decimal("0")      # max(0, 1 - 2)
     assert r.revenue_status == "reversed"
+
+
+def test_token_miss_single_grain_fallback_recovers_and_flags():
+    from domain.reconciliation import reconcile
+    # ID_MISMATCH shape: spend token != revenue token, but offer+geo+date match EXACTLY ONE grain.
+    spend = [_spend(spend="500.00", offer="OFFER_IDM", geo="GB",
+                    token="tok_spend", d=date(2026, 1, 15))]
+    convs = [_conv(revenue="1100.00", status="approved", conv_id="TXN_IDM",
+                   offer="OFFER_IDM", geo="GB", token="tok_revenue", d=date(2026, 1, 15))]
+    results = reconcile(spend, convs)
+    # The conversion's token misses, but offer+geo+date recovers it onto the single grain.
+    attributed = [r for r in results if r.offer_id == "OFFER_IDM" and r.reconciled_revenue > 0]
+    assert len(attributed) == 1
+    r = attributed[0]
+    assert r.reconciled_revenue == Decimal("1100.00")   # recovered, not dropped
+    assert r.attribution == "fallback"                   # flagged as coarser join
+    assert "TXN_IDM" in r.source_keys
+
+
+def test_token_match_keeps_attribution_token():
+    from domain.reconciliation import reconcile
+    # Clean token match -> attribution stays "token" (not fallback).
+    r = reconcile([_spend(token="tok_x")], [_conv(revenue="300.00", token="tok_x")])[0]
+    assert r.reconciled_revenue == Decimal("300.00")
+    assert r.attribution == "token"
+
+
+def test_token_miss_ambiguous_offer_geo_date_is_unattributed():
+    from domain.reconciliation import reconcile
+    # Token misses; offer+geo+date matches TWO grains (different campaigns) -> never guess -> unattributed.
+    spend = [
+        _spend(spend="100.00", offer="OFFER_AMB", geo="US", campaign="C1", ad="AD1",
+               token="tok_s1", d=date(2026, 1, 15)),
+        _spend(spend="100.00", offer="OFFER_AMB", geo="US", campaign="C2", ad="AD2",
+               token="tok_s2", d=date(2026, 1, 15)),
+    ]
+    convs = [_conv(revenue="400.00", status="approved", conv_id="TXN_AMB",
+                   offer="OFFER_AMB", geo="US", token="tok_none", d=date(2026, 1, 15))]
+    results = reconcile(spend, convs)
+    unattributed = [r for r in results if r.attribution == "unattributed"]
+    assert len(unattributed) == 1
+    assert unattributed[0].reconciled_revenue == Decimal("400.00")  # surfaced, not forced onto a grain
+    assert "TXN_AMB" in unattributed[0].source_keys
+    # The two real spend grains got NO revenue guessed onto them.
+    for r in results:
+        if r.offer_id == "OFFER_AMB" and r.attribution != "unattributed":
+            assert r.reconciled_revenue == Decimal("0")
+
+
+def test_token_miss_no_match_is_unattributed():
+    from domain.reconciliation import reconcile
+    # Token misses AND no offer+geo+date match anywhere -> unattributed (orphan revenue).
+    spend = [_spend(offer="OFFER_A", geo="US", token="tok_a")]
+    convs = [_conv(revenue="250.00", status="approved", conv_id="TXN_ORPH",
+                   offer="OFFER_NONE", geo="ZZ", token="tok_orphan")]
+    results = reconcile(spend, convs)
+    unattributed = [r for r in results if r.attribution == "unattributed"]
+    assert len(unattributed) == 1
+    assert unattributed[0].reconciled_revenue == Decimal("250.00")
+    assert "TXN_ORPH" in unattributed[0].source_keys
+
+
+def test_revenue_conservation_nothing_dropped():
+    from domain.reconciliation import reconcile
+    # Total reconciled_revenue across ALL results (attributed + unattributed) equals total
+    # approved-minus-reversed revenue in - no money silently vanishes.
+    spend = [
+        _spend(spend="100.00", offer="OFFER_A", geo="US", token="tok_a"),
+        _spend(spend="200.00", offer="OFFER_B", geo="US", token="tok_b"),
+    ]
+    convs = [
+        _conv(revenue="300.00", status="approved", conv_id="T1", offer="OFFER_A", geo="US", token="tok_a"),
+        _conv(revenue="500.00", status="approved", conv_id="T2", offer="OFFER_B", geo="US", token="tok_orphan"),
+    ]
+    results = reconcile(spend, convs)
+    total_out = sum((r.reconciled_revenue for r in results), Decimal("0"))
+    # 300 (token match) + 500 (orphan -> unattributed, still counted) = 800.
+    assert total_out == Decimal("800.00")
+
+
+def test_zero_spend_grain_reconciles_without_crash():
+    from domain.reconciliation import reconcile
+    # A grain with zero spend is valid (reconciliation does not divide) - sane result, no crash.
+    r = reconcile([_spend(spend="0.00", token="tok_z")],
+                  [_conv(revenue="100.00", status="approved", token="tok_z")])[0]
+    assert r.spend == Decimal("0.00")
+    assert r.reconciled_revenue == Decimal("100.00")
