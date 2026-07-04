@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>The Noon Report</title>
+</head>
+<body>
+  <h1>The Noon Report</h1>
+  <section>
+    <p>Platforms claim ${{ report.total_claim }}, you made ${{ report.total_real }}.</p>
+    <p>Gap: {{ report.gap_multiple }}x</p>
+    <p>Worth acting on: ${{ report.worth_acting_on }}</p>
+  </section>
+  <section>
+    <h2>Today's money moves</h2>
+    <ul>
+      {% for move in report.moves %}
+        <li>{{ move.action }}: {{ move.offer_id }} (${{ move.amount }}) - {{ move.reason }}</li>
+      {% empty %}
+        <li>No moves yet - seed and reconcile to see your numbers.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</body>
+</html>
