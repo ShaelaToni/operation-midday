@@ -7,3 +7,5 @@ python-dotenv==1.0.1
 pytest==8.2.2
 pytest-django==4.8.0
 Faker==25.8.0
+gunicorn==26.0.0
+whitenoise==6.12.0

@@ -3,6 +3,7 @@ build_report (pure) -> template. NO ProfitFact query logic lives here - the view
 read to the reader and the logic to the pure builder, then curates top-N moves for the digest
 (a presentation choice - the builder returns the full ranked list; the full list lives at a future
 /moves route)."""
+from django.http import HttpResponse
 from django.shortcuts import render
 
 from application.report import build_report
@@ -33,3 +34,8 @@ def report(request):
         "top_fuel": fuel,
         "top_free_up": top_free_up,
     })
+
+
+def health(request):
+    """Liveness check - plain 200, no DB. The box is up if this responds."""
+    return HttpResponse("ok", content_type="text/plain")
