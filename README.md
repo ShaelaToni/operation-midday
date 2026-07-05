@@ -93,6 +93,8 @@ You'll land on the gap headline, the "still yours to reclaim this week" total, a
 
 The demo runs on engineered synthetic fixtures shaped like real platform exports - no live accounts, no credentials. The seeder writes only raw inputs (spend rows, conversion/postback rows in each platform's real shape); every profit number and money-move is produced by the real pipeline. Demo data and real data enter through the same door, so a shop can drop in its own export and watch its own numbers run the identical code.
 
+The demo is intentionally open on synthetic data so anyone can click and see it. Production access is invite-only, with admin and member roles - reserved for the next version.
+
 Four story cases are planted in the data: a hidden winner the platform under-credits, an obvious zombie (spend, no payout), an overnight reversal that flips an offer from profit to loss, and one tracking-token mismatch the reconciler resolves by falling back to offer + geo + date.
 
 ---
