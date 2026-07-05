@@ -7,5 +7,6 @@ app_name = "noon"
 
 urlpatterns = [
     path("", views.report, name="report"),
+    path("refresh/", views.refresh, name="refresh"),
     path("health/", views.health, name="health"),
 ]

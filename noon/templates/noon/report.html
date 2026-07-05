@@ -5,6 +5,11 @@
     <span class="masthead__mark">Noon</span>
     <span class="masthead__sub">The Noon Report</span>
   </header>
+  <form class="refresh" method="post" action="{% url 'noon:refresh' %}">
+    {% csrf_token %}
+    <button type="submit" class="refresh__btn">Refresh</button>
+    <span class="refresh__stamp">Recomputed live at {{ recomputed_at }}</span>
+  </form>
   <section class="gap">
     <div class="gap__row">
       <div class="gap__side">
